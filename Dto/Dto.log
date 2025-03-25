@@ -1,0 +1,6 @@
+1742445554474:login testuser testpass
+1742445707824:help
+1742447312805:login
+1742447343272:login testuser testpass
+1742447382075:logout testuser
+1742447432120:history

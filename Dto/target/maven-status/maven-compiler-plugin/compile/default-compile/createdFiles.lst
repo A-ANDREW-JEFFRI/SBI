@@ -1,0 +1,5 @@
+com/example/shell/AuthShellCommands.class
+com/example/controller/AuthController.class
+com/example/dto/DtoApplication.class
+com/example/dto/LoginData.class
+com/example/dto/LoginRequest.class
