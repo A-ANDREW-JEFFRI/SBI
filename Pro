@@ -1,0 +1,299 @@
+To convert the above NETCONF client code into a Spring Boot project, we'll do the following:
+
+1. Create a Spring Boot project with REST endpoints.
+
+
+2. Use a service class to handle NETCONF requests.
+
+
+3. Use dependency injection to manage the NetconfClient.
+
+
+4. Expose REST APIs for performing get-config, edit-config, add-config, and delete-config.
+
+
+
+
+---
+
+Step 1: Create a Spring Boot Project
+
+Use Spring Initializr or create manually with:
+
+Spring Web (for REST API)
+
+Spring Boot Starter
+
+Lombok (optional, for reducing boilerplate code)
+
+
+If using Spring Initializr:
+
+Visit: start.spring.io
+
+Select:
+
+Spring Boot 3.x
+
+Dependencies: Spring Web
+
+Packaging: Jar
+
+Java Version: 17 (or compatible)
+
+
+
+
+---
+
+Step 2: Add Dependencies in pom.xml
+
+<dependencies>
+    <!-- Spring Boot Web for REST APIs -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- Lombok (Optional) for reducing boilerplate code -->
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <scope>provided</scope>
+    </dependency>
+
+    <!-- NETCONF-related dependencies -->
+    <dependency>
+        <groupId>org.opendaylight.netconf</groupId>
+        <artifactId>netconf-client</artifactId>
+        <version>your-version</version>
+    </dependency>
+</dependencies>
+
+
+---
+
+Step 3: Define a NETCONF Client Configuration
+
+Create a Spring Boot Configuration class to manage the NETCONF client.
+
+NetconfClientConfig.java
+
+package com.example.netconf.config;
+
+import org.opendaylight.netconf.client.*;
+import org.opendaylight.netconf.client.conf.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.net.InetSocketAddress;
+import java.net.InetAddress;
+import java.util.Optional;
+
+@Configuration
+public class NetconfClientConfig {
+
+    @Bean
+    public NetconfClientConfiguration netconfClientConfig() throws Exception {
+        String host = "127.0.0.1"; // Change to your NETCONF server
+        int port = 830;
+        boolean ssh = true; // Use SSH for secure communication
+
+        InetSocketAddress netconfAddress = new InetSocketAddress(InetAddress.getByName(host), port);
+        NetconfClientConfigurationBuilder builder = NetconfClientConfigurationBuilder.create();
+        builder.withAddress(netconfAddress);
+        builder.withSessionListener(new SimpleNetconfClientSessionListener());
+        builder.withReconnectStrategy(new NeverReconnectStrategy());
+
+        if (ssh) {
+            builder.withProtocol(NetconfClientProtocol.SSH);
+            // Authentication handler (to be implemented)
+            builder.withAuthHandler(Optional.empty().get()); 
+        } else {
+            builder.withProtocol(NetconfClientProtocol.TCP);
+        }
+
+        return builder.build();
+    }
+}
+
+
+---
+
+Step 4: Create a Service Class
+
+This class sends NETCONF messages and handles communication with the NETCONF server.
+
+NetconfService.java
+
+package com.example.netconf.service;
+
+import org.opendaylight.netconf.client.NetconfClient;
+import org.opendaylight.netconf.client.conf.NetconfClientConfiguration;
+import org.opendaylight.netconf.api.NetconfMessage;
+import org.springframework.stereotype.Service;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import java.util.concurrent.Future;
+
+@Service
+public class NetconfService {
+    private final NetconfClient client;
+
+    public NetconfService(NetconfClientConfiguration config) {
+        this.client = new NetconfClient(config);
+    }
+
+    public String getConfig(String messageId, String namespace, String container) {
+        try {
+            NetconfMessage request = createGetConfigMessage(messageId, namespace, container);
+            Future<NetconfMessage> response = client.sendRequest(request);
+            return response.get().toString();
+        } catch (Exception e) {
+            return "Error in GetConfig: " + e.getMessage();
+        }
+    }
+
+    public String editConfig(String messageId, String configData) {
+        try {
+            NetconfMessage request = createEditConfigMessage(messageId, configData);
+            Future<NetconfMessage> response = client.sendRequest(request);
+            return response.get().toString();
+        } catch (Exception e) {
+            return "Error in EditConfig: " + e.getMessage();
+        }
+    }
+
+    public String addConfig(String messageId, String configData) {
+        return editConfig(messageId, configData); // Same as edit-config
+    }
+
+    public String deleteConfig(String messageId, String container) {
+        try {
+            NetconfMessage request = createDeleteConfigMessage(messageId, container);
+            Future<NetconfMessage> response = client.sendRequest(request);
+            return response.get().toString();
+        } catch (Exception e) {
+            return "Error in DeleteConfig: " + e.getMessage();
+        }
+    }
+
+    private NetconfMessage createGetConfigMessage(String messageId, String namespace, String container) throws Exception {
+        DocumentBuilder docBuilder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
+        org.w3c.dom.Document doc = docBuilder.newDocument();
+
+        org.w3c.dom.Element rpcElement = doc.createElementNS("urn:ietf:params:xml:ns:netconf:base:1.0", "rpc");
+        rpcElement.setAttribute("message-id", messageId);
+        doc.appendChild(rpcElement);
+
+        org.w3c.dom.Element getConfigElement = doc.createElement("get");
+        rpcElement.appendChild(getConfigElement);
+
+        org.w3c.dom.Element filterElement = doc.createElement("filter");
+        filterElement.setAttribute("type", "subtree");
+        getConfigElement.appendChild(filterElement);
+
+        org.w3c.dom.Element containerElement = doc.createElement(container);
+        containerElement.setAttribute("xmlns", namespace);
+        filterElement.appendChild(containerElement);
+
+        return new NetconfMessage(doc);
+    }
+
+    private NetconfMessage createEditConfigMessage(String messageId, String configData) throws Exception {
+        // Similar to createGetConfigMessage but for edit-config operation
+        return null; // Implement logic
+    }
+
+    private NetconfMessage createDeleteConfigMessage(String messageId, String container) throws Exception {
+        // Similar to createGetConfigMessage but for delete operation
+        return null; // Implement logic
+    }
+}
+
+
+---
+
+Step 5: Create a REST Controller
+
+Expose REST APIs to interact with the NETCONF service.
+
+NetconfController.java
+
+package com.example.netconf.controller;
+
+import com.example.netconf.service.NetconfService;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/netconf")
+public class NetconfController {
+    private final NetconfService netconfService;
+
+    public NetconfController(NetconfService netconfService) {
+        this.netconfService = netconfService;
+    }
+
+    @GetMapping("/get-config")
+    public String getConfig(
+        @RequestParam String messageId,
+        @RequestParam String namespace,
+        @RequestParam String container) {
+        return netconfService.getConfig(messageId, namespace, container);
+    }
+
+    @PostMapping("/edit-config")
+    public String editConfig(
+        @RequestParam String messageId,
+        @RequestParam String configData) {
+        return netconfService.editConfig(messageId, configData);
+    }
+
+    @PostMapping("/add-config")
+    public String addConfig(
+        @RequestParam String messageId,
+        @RequestParam String configData) {
+        return netconfService.addConfig(messageId, configData);
+    }
+
+    @DeleteMapping("/delete-config")
+    public String deleteConfig(
+        @RequestParam String messageId,
+        @RequestParam String container) {
+        return netconfService.deleteConfig(messageId, container);
+    }
+}
+
+
+---
+
+Step 6: Run the Spring Boot Application
+
+1. Build & Run
+
+
+
+mvn clean install
+mvn spring-boot:run
+
+2. Test API using Postman or Curl
+
+
+
+curl "http://localhost:8080/netconf/get-config?messageId=101&namespace=urn:test&container=interfaces"
+
+
+---
+
+Final Thoughts
+
+Converted the Java program into a Spring Boot project with REST endpoints.
+
+Decoupled business logic into NetconfService for maintainability.
+
+Made the client configurable with NetconfClientConfig.
+
+
+Would you like me to refine any specific part?
+
