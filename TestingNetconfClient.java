@@ -19,6 +19,7 @@ import io.netty.util.concurrent.GlobalEventExecutor;
 
 import java.io.ByteArrayInputStream;
 import java.io.Closeable;
+import java.io.Console;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -61,7 +62,9 @@ public class TestingNetconfClient implements Closeable {
     private final String label; //client instance
     private final NetconfClientSession clientSession; //netconf communication
     private final NetconfClientSessionListener sessionListener; //handle session events
-    private final long sessionId; //unique identifier
+    private static Long sessionId; //unique identifier |  Store session ID
+    private static TestingNetconfClient client = null;  // Store active client session
+//    private static String sessionId = null;  // Store session ID
 
     //Constructor
     public TestingNetconfClient(final String clientLabel, //client identifier
@@ -433,139 +436,225 @@ public class TestingNetconfClient implements Closeable {
     
     //Main Method
     public static void main(final String[] args) throws Exception {
-    	java.io.Console console = System.console();
-        if (console == null)
-        {
-        	System.out.println("no console");
+    	Console console = System.console();
+        if (console == null) {
+            System.out.println("No console available.");
+            return;
         }
-        
-        while(true) {
-        	
-	        System.out.println("1 : get");
-	    	System.out.println("2 : get with filter");
-	    	System.out.println("3 : edit-config");
-	    	System.out.println("4 : add-config");
-	    	System.out.println("5 : delete-config");
-	    	System.out.println("6 : exit");
 
-	        System.out.println("7 : login");
-	    	System.out.println("8 : logout");
-	        String choice = console.readLine("Enter your choice : ");
-	        
-	        switch(choice)
-	        {
-    	
-//		 String name = console.readLine("Enter the Name : ");
-//	     String password = console.readLine("Enter the Password : ");
-//	     String ip = console.readLine("Enter the ip address : ");
-//         
-//         
-//        HashedWheelTimer hashedWheelTimer = new HashedWheelTimer(); //schedules the timeout
-//        NioEventLoopGroup nettyGroup = new NioEventLoopGroup(); //handle i/o operation
-//        NetconfClientDispatcherImpl netconfClientDispatcher = new NetconfClientDispatcherImpl(nettyGroup, nettyGroup,hashedWheelTimer);//creating client session
-//        LoginPasswordHandler authHandler = new LoginPasswordHandler(name, password);
-//        TestingNetconfClient client = new TestingNetconfClient("client", netconfClientDispatcher,
-//                getClientConfig(ip, 2022, true, Optional.of(authHandler)));
-//        System.out.println(client.getCapabilities());
-//        System.out.println(client.sessionId);
-//        System.out.println(client.hashCode());
-        
-        
-        
-        
-        
-       
-        
-//        if(name.equals("admin") && password.equals("admin")  && ip.equals("127.0.0.0"))
-//        {
-	        
-//	        while(true) {
-//	        	
-//	        System.out.println("1 : get");
-//	    	System.out.println("2 : get with filter");
-//	    	System.out.println("3 : edit-config");
-//	    	System.out.println("4 : add-config");
-//	    	System.out.println("5 : delete-config");
-//	    	System.out.println("6 : exit");
-//	        String choice = console.readLine("Enter your choice : ");
-//	        
-//	        switch(choice)
-//	        {
-	        case "1":
-	            NetconfMessage getconf = GetMessage();
-	            Future<NetconfMessage> resp = client.sendRequest(getconf);
-	            System.out.println(resp.toString());
-	            NetconfMessage getResp = client.sendMessage(getconf);
-	            System.out.println(getResp);
-	        	break;
-	        case "2":
-	            NetconfMessage getconfFilter = GetConfigMessage(); 
-	            Future<NetconfMessage> respFilter = client.sendRequest(getconfFilter);
-	            System.out.println(respFilter.toString());
-	            NetconfMessage getRespFilter = client.sendMessage(getconfFilter);
-	            System.out.println(getRespFilter);
-	        	break;
-	        case "3":
-	            NetconfMessage editconf = editConfigMessage();
-	            Future<NetconfMessage> respEdit = client.sendRequest(editconf);
-	            System.out.println(respEdit.toString());
-	            NetconfMessage editResp = client.sendMessage(editconf);
-	            System.out.println(editResp);
-	        case "4":
-	            NetconfMessage addconf = addConfigMessage();
-	//            System.out.println(deletetconf);
-	            Future<NetconfMessage> respAdd = client.sendRequest(addconf);
-	            System.out.println(respAdd.toString());
-	            NetconfMessage AddResp = client.sendMessage(addconf);
-	            System.out.println(AddResp);
-	        	break;
-	        case "5":
-	            NetconfMessage deletetconf = deleteConfigMessage();
-	//            System.out.println(deletetconf);
-	            Future<NetconfMessage> respDelete = client.sendRequest(deletetconf);
-	            System.out.println(respDelete.toString());
-	            NetconfMessage deleteResp = client.sendMessage(deletetconf);
-	            System.out.println(deleteResp);
-	        	break;
-	       
-	        case "6":
-	        	System.out.println("Exit.....");
-	        	System.exit(0);
-//	        	return;
-	        case "7":
-	        	 String name = console.readLine("Enter the Name : ");
-	    	     String password = console.readLine("Enter the Password : ");
-	    	     String ip = console.readLine("Enter the ip address : ");
-	             
-	             
-	            HashedWheelTimer hashedWheelTimer = new HashedWheelTimer(); //schedules the timeout
-	            NioEventLoopGroup nettyGroup = new NioEventLoopGroup(); //handle i/o operation
-	            NetconfClientDispatcherImpl netconfClientDispatcher = new NetconfClientDispatcherImpl(nettyGroup, nettyGroup,hashedWheelTimer);//creating client session
-	            LoginPasswordHandler authHandler = new LoginPasswordHandler(name, password);
-	            TestingNetconfClient client = new TestingNetconfClient("client", netconfClientDispatcher,
-	                    getClientConfig(ip, 2022, true, Optional.of(authHandler)));
-	            System.out.println(client.getCapabilities());
-	            System.out.println(client.sessionId);
-	            System.out.println(client.hashCode());
-	        default:
-	        	System.out.println("Invalid choice!");
-	        }
-	        }
-//        }  
-//        else {
-//        	System.out.println("User name or Password or ip address is Incorrect!!!!");
-//        }
+        while (true) {
+            // Show login option if not logged in, otherwise show Netconf operations
+//            if (sessionId == null) {
+                System.out.println("1 : Login");
+//                System.out.println("2 : Exit");
+//            } else {
+//                System.out.println("\n--- Netconf Operations ---");
+                System.out.println("2 : Get");
+                System.out.println("3 : Get with Filter");
+//                System.out.println("3 : Edit Config");
+//                System.out.println("4 : Add Config");
+//                System.out.println("5 : Delete Config");
+                System.out.println("4 : Logout");
+
+                System.out.println("5 : Exit");
+                String choice = console.readLine("Enter your choice: ");
+//            }
+
+//            String choice = console.readLine("Enter your choice: ");
+
+            switch (choice) {
+            case "1":
+                if (sessionId == null) {
+                    login(console);
+                } else {
+                    System.out.println("please logout to login ");
+                }
+                break;
+            case "2":
+            	if (sessionId != null) 
+        		{
+            		 performGetOperation();
+        		
+        		}
+            	else {
+            		System.out.println("please login to perform netconf operation");
+                }
+                break;
+            case "3":
+            	if (sessionId != null) 
+            		{
+            		performGetWithFilter();
+            		}
+               
+                 else {
+             		System.out.println("please login to perform netconf operation");
+
+                }
+                break;
+            case "4":
+                if (sessionId != null) logout();
+                else System.out.println("please login to perform logout operation");
+                break;
+
+            case "5":
+                if (sessionId == null) {
+                    System.out.println("Exiting...");
+                    System.exit(0);
+                } else {
+                	System.out.println("please logout to exit ");
+                }
+                break;
+            default:
+                System.out.println("Invalid choice! Try again.");
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+//            switch (choice) {
+//                case "1":
+//                    if (sessionId == null) {
+//                        login(console);
+//                    } else {
+//                        performGetOperation();
+//                    }
+//                    break;
+//                case "2":
+//                    if (sessionId == null) {
+//                        System.out.println("Exiting...");
+//                        System.exit(0);
+//                    } else {
+//                        performGetWithFilter();
+//                    }
+//                    break;
+//                case "3":
+//                    if (sessionId != null) performEditConfig();
+//                    else System.out.println("Invalid choice!");
+//                    break;
+//                case "4":
+//                    if (sessionId != null) performAddConfig();
+//                    else System.out.println("Invalid choice!");
+//                    break;
+//                case "5":
+//                    if (sessionId != null) performDeleteConfig();
+//                    else System.out.println("Invalid choice!");
+//                    break;
+//                case "6":
+//                    if (sessionId != null) logout();
+//                    else System.out.println("Invalid choice!");
+//                    break;
+//                default:
+//                    System.out.println("Invalid choice! Try again.");
+            }
+        }
     }
 
-    //Client Configuration methods
+
+
+    
+    private static void login(Console console) {
+    	String ip = console.readLine("Enter IP Address: ");
+        String name = console.readLine("Enter Username: ");
+        String password = console.readLine("Enter Password: ");
+        
+
+        try {
+            HashedWheelTimer hashedWheelTimer = new HashedWheelTimer();
+            NioEventLoopGroup nettyGroup = new NioEventLoopGroup();
+            NetconfClientDispatcherImpl netconfClientDispatcher = new NetconfClientDispatcherImpl(nettyGroup, nettyGroup, hashedWheelTimer);
+            LoginPasswordHandler authHandler = new LoginPasswordHandler(name, password);
+            
+            client = new TestingNetconfClient("client", netconfClientDispatcher, getClientConfig(ip, 2022, true, Optional.of(authHandler)));
+            sessionId = client.sessionId;  // Store session ID
+            
+            System.out.println("Login successful! Session ID: " + sessionId);
+//            System.out.println("Server Capabilities: " + client.getCapabilities());
+        } catch (Exception e) {
+            System.out.println("Login failed: " + e.getMessage());
+            client = null;
+            sessionId = null;
+        }
+    }
+
+    private static void logout() {
+        if (client != null) {
+        	try {
+        		client.close();
+        	}
+            catch(Exception e)
+        	{
+            	System.out.println("Error in logout operation: " + e.getMessage());
+        	}
+            client = null;
+            sessionId = null;
+            System.out.println("Logged out successfully.");
+        }
+    }
+
+    private static void performGetOperation() {
+        try {
+            NetconfMessage getConf = GetMessage();
+            Future<NetconfMessage> resp = client.sendRequest(getConf);
+            System.out.println(resp.get().toString());
+        } catch (Exception e) {
+            System.out.println("Error in Get operation: " + e.getMessage());
+        }
+    }
+
+    private static void performGetWithFilter() {
+        try {
+            NetconfMessage getConfFilter = GetConfigMessage();
+            Future<NetconfMessage> respFilter = client.sendRequest(getConfFilter);
+            System.out.println(respFilter.get().toString());
+        } catch (Exception e) {
+            System.out.println("Error in Get with Filter: " + e.getMessage());
+        }
+    }
+
+    private static void performEditConfig() {
+        try {
+            NetconfMessage editConf = editConfigMessage();
+            Future<NetconfMessage> respEdit = client.sendRequest(editConf);
+            System.out.println(respEdit.get().toString());
+        } catch (Exception e) {
+            System.out.println("Error in Edit Config: " + e.getMessage());
+        }
+    }
+
+    private static void performAddConfig() {
+        try {
+            NetconfMessage addConf = addConfigMessage();
+            Future<NetconfMessage> respAdd = client.sendRequest(addConf);
+            System.out.println(respAdd.get().toString());
+        } catch (Exception e) {
+            System.out.println("Error in Add Config: " + e.getMessage());
+        }
+    }
+
+    private static void performDeleteConfig() {
+        try {
+            NetconfMessage deleteConf = deleteConfigMessage();
+            Future<NetconfMessage> respDelete = client.sendRequest(deleteConf);
+            System.out.println(respDelete.get().toString());
+        } catch (Exception e) {
+            System.out.println("Error in Delete Config: " + e.getMessage());
+        }
+    }
+
     private static NetconfClientConfiguration getClientConfig(final String host, final int port, final boolean ssh,
-            final Optional<? extends AuthenticationHandler> maybeAuthHandler) throws UnknownHostException {
+            final Optional<? extends AuthenticationHandler> maybeAuthHandler) throws Exception {
         InetSocketAddress netconfAddress = new InetSocketAddress(InetAddress.getByName(host), port);
         final NetconfClientConfigurationBuilder b = NetconfClientConfigurationBuilder.create();
         b.withAddress(netconfAddress);
-        b.withSessionListener(new SimpleNetconfClientSessionListener()); //handle the session
+        b.withSessionListener(new SimpleNetconfClientSessionListener());
         b.withReconnectStrategy(new NeverReconnectStrategy(GlobalEventExecutor.INSTANCE,
                 NetconfClientConfigurationBuilder.DEFAULT_CONNECTION_TIMEOUT_MILLIS));
+
         if (ssh) {
             b.withProtocol(NetconfClientProtocol.SSH);
             b.withAuthHandler(maybeAuthHandler.get());
@@ -575,3 +664,27 @@ public class TestingNetconfClient implements Closeable {
         return b.build();
     }
 }
+    
+    
+    
+//    
+//    
+//    
+//    //Client Configuration methods
+//    private static NetconfClientConfiguration getClientConfig(final String host, final int port, final boolean ssh,
+//            final Optional<? extends AuthenticationHandler> maybeAuthHandler) throws UnknownHostException {
+//        InetSocketAddress netconfAddress = new InetSocketAddress(InetAddress.getByName(host), port);
+//        final NetconfClientConfigurationBuilder b = NetconfClientConfigurationBuilder.create();
+//        b.withAddress(netconfAddress);
+//        b.withSessionListener(new SimpleNetconfClientSessionListener()); //handle the session
+//        b.withReconnectStrategy(new NeverReconnectStrategy(GlobalEventExecutor.INSTANCE,
+//                NetconfClientConfigurationBuilder.DEFAULT_CONNECTION_TIMEOUT_MILLIS));
+//        if (ssh) {
+//            b.withProtocol(NetconfClientProtocol.SSH);
+//            b.withAuthHandler(maybeAuthHandler.get());
+//        } else {
+//            b.withProtocol(NetconfClientProtocol.TCP);
+//        }
+//        return b.build();
+//    }
+//}
