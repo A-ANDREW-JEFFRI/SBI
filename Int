@@ -1,0 +1,358 @@
+Below is an example of how you might integrate your NETCONF‐operations endpoints with your login/logout session management in a Spring Boot application. In this design, the REST controller (here called AuthController) handles authentication (login/logout) and, for valid sessions, it delegates NETCONF operations to a service (NetconfService). You can adjust the NETCONF service methods (and DTOs) as needed.
+
+
+---
+
+1. Define DTO Classes
+
+Create simple DTOs for login and logout requests and for holding session data.
+
+LoginRequest.java
+
+package com.example.dto;
+
+public class LoginRequest {
+    private String username;
+    private String ip;
+    private int port;
+
+    // Getters and setters
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getIp() {
+        return ip;
+    }
+
+    public void setIp(String ip) {
+        this.ip = ip;
+    }
+
+    public int getPort() {
+        return port;
+    }
+
+    public void setPort(int port) {
+        this.port = port;
+    }
+}
+
+LogoutRequest.java
+
+package com.example.dto;
+
+public class LogoutRequest {
+    private String sessionId;
+
+    // Getters and setters
+
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
+    }
+}
+
+LoginData.java
+
+package com.example.dto;
+
+public class LoginData {
+    private String username;
+    private String status;
+    private String ip;
+    private int port;
+    private String sessionId;
+
+    public LoginData(String username, String status, String ip, int port, String sessionId) {
+        this.username = username;
+        this.status = status;
+        this.ip = ip;
+        this.port = port;
+        this.sessionId = sessionId;
+    }
+
+    // Getters and setters
+
+    public String getUsername() {
+        return username;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public String getIp() {
+        return ip;
+    }
+
+    public int getPort() {
+        return port;
+    }
+
+    public String getSessionId() {
+        return sessionId;
+    }
+}
+
+
+---
+
+2. Create the NETCONF Service
+
+The service encapsulates NETCONF operations. In this example, the methods are placeholders that build and send NETCONF messages (using your earlier NETCONF client code).
+
+NetconfService.java
+
+package com.example.service;
+
+import org.opendaylight.netconf.api.NetconfMessage;
+import org.springframework.stereotype.Service;
+
+import java.util.concurrent.Future;
+
+@Service
+public class NetconfService {
+    
+    // In a full implementation the NetconfClient and configuration
+    // would be injected via a configuration class.
+    // Here we assume the client is already configured.
+    // private final NetconfClient client;
+
+    // public NetconfService(NetconfClientConfiguration config) {
+    //     this.client = new NetconfClient(config);
+    // }
+
+    public String get(String messageId) throws Exception {
+        // Build a simple NETCONF <get> message and send it
+        // For demonstration, we return a static XML response.
+        // Replace this with your actual NETCONF client call.
+        String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                + "<rpc messageId=\"" + messageId + "\">\n"
+                + "  <get>\n"
+                + "    <filter type=\"subtree\"></filter>\n"
+                + "  </get>\n"
+                + "</rpc>";
+        // Future<NetconfMessage> response = client.sendRequest(new NetconfMessage(xml));
+        // return response.get().toString();
+        return xml;
+    }
+
+    public String getConfig(String messageId, String namespace, String container) throws Exception {
+        // Build a NETCONF <get-config> message using provided parameters.
+        String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                + "<rpc messageId=\"" + messageId + "\">\n"
+                + "  <get-config>\n"
+                + "    <source>\n"
+                + "      <running/>\n"
+                + "    </source>\n"
+                + "    <filter type=\"subtree\">\n"
+                + "      <" + container + " xmlns=\"" + namespace + "\"/>\n"
+                + "    </filter>\n"
+                + "  </get-config>\n"
+                + "</rpc>";
+        // Future<NetconfMessage> response = client.sendRequest(new NetconfMessage(xml));
+        // return response.get().toString();
+        return xml;
+    }
+
+    public String editConfig(String messageId, String configData) throws Exception {
+        // Build a NETCONF <edit-config> message.
+        String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                + "<rpc messageId=\"" + messageId + "\">\n"
+                + "  <edit-config>\n"
+                + "    <target>\n"
+                + "      <running/>\n"
+                + "    </target>\n"
+                + "    <config>\n"
+                + "      <data>\n"
+                + "         " + configData + "\n"
+                + "      </data>\n"
+                + "    </config>\n"
+                + "  </edit-config>\n"
+                + "</rpc>";
+        // Future<NetconfMessage> response = client.sendRequest(new NetconfMessage(xml));
+        // return response.get().toString();
+        return xml;
+    }
+
+    // You can add methods for add-config, delete-config, etc. as needed.
+}
+
+> Note: In a real implementation you would inject and use your actual NETCONF client (with its configuration) rather than returning static XML strings.
+
+
+
+
+---
+
+3. Create the REST Controller
+
+The controller now handles login/logout and delegates NETCONF requests to the service if the session is valid.
+
+AuthController.java
+
+package com.example.controller;
+
+import com.example.dto.LoginData;
+import com.example.dto.LoginRequest;
+import com.example.dto.LogoutRequest;
+import com.example.service.NetconfService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/")
+public class AuthController {
+
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
+    private final Map<String, LoginData> activeSessions = new HashMap<>();
+    private final NetconfService netconfService;
+
+    public AuthController(NetconfService netconfService) {
+        this.netconfService = netconfService;
+    }
+
+    @PostMapping("/login")
+    public Map<String, String> login(@RequestBody LoginRequest request) {
+        String sessionId = UUID.randomUUID().toString();
+        LoginData loginData = new LoginData(
+                request.getUsername(),
+                "LOGIN",
+                request.getIp(),
+                request.getPort(),
+                sessionId
+        );
+        activeSessions.put(sessionId, loginData);
+        logger.info("User {} logged in with session ID {}", request.getUsername(), sessionId);
+
+        Map<String, String> response = new HashMap<>();
+        response.put("username", request.getUsername());
+        response.put("status", "LOGIN SUCCESS");
+        response.put("ip", request.getIp());
+        response.put("port", String.valueOf(request.getPort()));
+        response.put("sessionId", sessionId);
+        return response;
+    }
+
+    @PostMapping("/logout")
+    public String logout(@RequestBody LogoutRequest request) {
+        if (!activeSessions.containsKey(request.getSessionId())) {
+            return "Invalid session";
+        }
+        activeSessions.remove(request.getSessionId());
+        return "Logout successful";
+    }
+
+    @PostMapping(value = "/get", produces = MediaType.APPLICATION_XML_VALUE)
+    public ResponseEntity<String> get(@RequestBody Map<String, String> request) {
+        return processRequest(request, "get");
+    }
+
+    @PostMapping(value = "/get-config", produces = MediaType.APPLICATION_XML_VALUE)
+    public ResponseEntity<String> getConfig(@RequestBody Map<String, String> request) {
+        return processRequest(request, "get-config");
+    }
+
+    @PostMapping(value = "/edit-config", produces = MediaType.APPLICATION_XML_VALUE)
+    public ResponseEntity<String> editConfig(@RequestBody Map<String, String> request) {
+        return processRequest(request, "edit-config");
+    }
+
+    private ResponseEntity<String> processRequest(Map<String, String> request, String operation) {
+        String sessionId = request.get("sessionId");
+        String messageId = request.get("messageId");
+
+        if (!activeSessions.containsKey(sessionId)) {
+            return ResponseEntity.badRequest().body("Invalid session");
+        }
+        logger.info("Session ID {} - {} operation invoked", sessionId, operation);
+
+        String response;
+        try {
+            switch (operation) {
+                case "get":
+                    response = netconfService.get(messageId);
+                    break;
+                case "get-config":
+                    // Expect additional parameters for namespace and container in the request body
+                    String namespace = request.get("namespace");
+                    String container = request.get("container");
+                    response = netconfService.getConfig(messageId, namespace, container);
+                    break;
+                case "edit-config":
+                    // Assume configData is provided in the request body
+                    String configData = request.get("configData");
+                    response = netconfService.editConfig(messageId, configData);
+                    break;
+                default:
+                    response = "<error>Invalid operation</error>";
+                    break;
+            }
+        } catch (Exception e) {
+            response = "<error>" + e.getMessage() + "</error>";
+        }
+        return ResponseEntity.ok(response);
+    }
+}
+
+
+---
+
+4. Running and Testing the Application
+
+1. Build & Run the Application
+Use Maven or your IDE:
+
+mvn clean install
+mvn spring-boot:run
+
+
+2. Test the Endpoints
+For example, using curl or Postman:
+
+Login:
+
+curl -X POST http://localhost:8080/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "user1", "ip": "192.168.1.100", "port": 830}'
+
+Perform a NETCONF Operation (e.g., get-config):
+Make sure to include the sessionId (from login), messageId, and other parameters:
+
+curl -X POST http://localhost:8080/get-config \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId": "your-session-id", "messageId": "101", "namespace": "urn:test", "container": "interfaces"}'
+
+
+
+
+
+---
+
+Summary
+
+The DTO classes capture login/logout request data.
+
+The NetconfService encapsulates building and (in a real-world scenario) sending NETCONF messages.
+
+The AuthController manages sessions and validates each operation before delegating to the service.
+
+
+This integrated Spring Boot project combines session management with NETCONF operations. Adjust the NETCONF client configuration and error handling as needed for your specific environment.
+
